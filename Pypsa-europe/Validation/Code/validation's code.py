@@ -12,7 +12,7 @@ import cartopy.crs as ccrs
 
 #collegamento BUS
 
-line_loading = (n.lines_t.p0.abs().mean().sort_index() / (n.lines.s_nom*n.lines.s_max_pu).sort_index()).fillna(0.)
+loading = (n.lines_t.p0.abs().mean().sort_index() / (n.lines.s_nom*n.lines.s_max_pu).sort_index()).fillna(0.)
 
 
 fig,ax = plt.subplots(
