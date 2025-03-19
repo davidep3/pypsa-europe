@@ -1,12 +1,10 @@
-import pypsa
+import pypsa 
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib as mpl
 import pandas as pd
+n= pypsa.Network("base_s_10_elec_1h.nc")
 
-
-
-n = pypsa.Network("/home/davide/pypsa-eur/results/Italy2019_10.1/networks/base_s_10_elec_1h.nc")
 #plotting networks
 import cartopy.crs as ccrs
 
@@ -28,7 +26,7 @@ n.plot(ax = ax,
        branch_components = ["Line"],   
        line_widths = n.lines.s_nom/3e3,
     
-       line_colors = line_loading,
+       line_colors = loading,
        line_cmap = plt.cm.viridis,     #color map
        color_geomap = True,            #put the sea
        bus_sizes = 0.05,)
@@ -100,13 +98,13 @@ bar_width = 0.35  # larghezza delle barre
 # Crea il grafico a barre
 fig, ax = plt.subplots()
 
-bars1 = ax.bar(x - bar_width / 2, validation_capacity.values.flatten(), width=bar_width, label='Installed Capacity 2019')
-bars2 = ax.bar(x + bar_width / 2, reference_data_Terna, width=bar_width, label='Terna data 2019')
+bars1 = ax.bar(x - bar_width / 2, validation_capacity.values.flatten(), width=bar_width, label='pypsa-europe 2019')
+bars2 = ax.bar(x + bar_width / 2, reference_data_Terna, width=bar_width, label='Terna 2019')
 
 # Aggiungi le etichette e il titolo
 ax.set_xlabel('carrier')
 ax.set_ylabel('Capacity [GW]')
-ax.set_title('Comparison between pypsa-eur data and terna data')
+ax.set_title('Comparison between pypsa-eur data and Terna data')
 ax.set_xticks(x)
 ax.set_xticklabels(validation_capacity.index, rotation=45)  # Le etichette sono i nomi delle fonti
 ax.legend()
@@ -146,7 +144,7 @@ plt.ylabel("Electric demand 2019 [GW]")
 
 
 #3) validazione produzione
-generators= n.generators_t.p.sum(axis = 1).values.sum()/1e6    #279 TWh , manca idroelettrico forse
+generators= n.generators_t.p.sum(axis = 1).values.sum()/1e6    #280 TWh , manca idroelettrico forse
 
 generazione_totale = pd.concat([n.generators_t.p , n.storage_units_t.p], axis= 1).sum().values.sum()/1e6   #294 TWh su Terna 294 TWh alla produzione di energia totale
 
@@ -206,13 +204,19 @@ plt.show()
 
 
 
-#grafico per confronto con dati di Terna sulla produzione
-reference_data_Terna1 = [195.7, 23.7, 20.2]  #TWh ,da Terna
+#grafico  a barre, per confronto con dati di Terna sulla produzione
+reference_data_Terna1 = [195.7, 23.7, 20.2, 48.15]  #TWh ,da Terna; termoelettrico, fotovoltaico, eolico, idrico
 termoelettrico_g = termoelettrico.sum()/1e3  # TWh
 PV_g = PV.sum()/1e3  #TWh
 wind_g = wind.sum()/1e3  #TWh
 
-generation = pd.DataFrame([termoelettrico_g, PV_g, wind_g], index=["thermoelectric", "Photovoltaic", "onshore wind"])
+hydro_g = n.generators_t.p.filter(like = "ror").sum(axis=1).sum()/1e6  #TWh
+hydro_s = n.storage_units_t.p.sum(axis=1).sum()/1e6   #TWh
+hydro = hydro_g + hydro_s
+
+
+
+generation = pd.DataFrame([termoelettrico_g, PV_g, wind_g, hydro], index=["thermoelectric", "Photovoltaic", "onshore wind", "hydro"])
 
 
 
@@ -225,8 +229,8 @@ bar_width = 0.35
 # Crea il grafico a barre
 fig, ax = plt.subplots()
 
-bars1 = ax.bar(x - bar_width / 2, generation.values.flatten(), width=bar_width, label='pypsa-europe data 2019')
-bars2 = ax.bar(x + bar_width / 2, reference_data_Terna1, width=bar_width, label='Terna data 2019')
+bars1 = ax.bar(x - bar_width / 2, generation.values.flatten(), width=bar_width, label='pypsa-europe 2019')
+bars2 = ax.bar(x + bar_width / 2, reference_data_Terna1, width=bar_width, label='Terna 2019')
 
 # Aggiungi le etichette e il titolo
 
