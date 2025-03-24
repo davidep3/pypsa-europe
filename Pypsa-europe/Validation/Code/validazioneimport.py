@@ -53,7 +53,7 @@ plt.yticks(range(0,46))
 total_consumption = n.loads_t.p_set.filter(like = "IT", axis = 1).sum(axis = 1).resample('H').mean()/1e3
 plt.figure(3,figsize = (15,5))
 plt.plot(total_consumption ,label = "2019 consumption")
-plt.ylabel("Total consumption [GW]")  #confrontando su fabbisogno in Terna, l'andamento è simile, però fa riferimento alla potenza!!
+plt.ylabel("Total consumption [GW]") 
 plt.xlabel("Month of the year")
 plt.legend(loc = "upper right")
 
