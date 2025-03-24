@@ -84,7 +84,7 @@ validation_capacity = df.loc[["CCGT", "coal", "onwind" ,"solar", "hydropower"]]
 
 
 reference_data_Terna = [40.5, 10, 10.7, 20.8, 19.8]  # Presi da Terna, CCGT preso sia con produzione di calore che senza, carobne da DDS 2019
-#https://dati.terna.it/generazione/dati-statistici#capacita/termoelettrico  per il CCGT
+#https://dati.terna.it/generazione/dati-statistici#capacita/termoelettrico  per il CCGT, "in esplora sottocategorie"
 #https://dati.terna.it/generazione/dati-statistici#capacita/fonti-rinnovabili  per le rinnovabili
 #https://download.terna.it/terna/dds%20libro%2009%2030%2017h15_8d745ced8696c60.pdf per il carbone
 
