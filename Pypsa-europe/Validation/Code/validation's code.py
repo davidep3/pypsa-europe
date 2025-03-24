@@ -84,7 +84,9 @@ validation_capacity = df.loc[["CCGT", "coal", "onwind" ,"solar", "hydropower"]]
 
 
 reference_data_Terna = [40.5, 10, 10.7, 20.8, 19.8]  # Presi da Terna, CCGT preso sia con produzione di calore che senza, carobne da DDS 2019
-
+#https://dati.terna.it/generazione/dati-statistici#capacita/termoelettrico  per il CCGT
+#https://dati.terna.it/generazione/dati-statistici#capacita/fonti-rinnovabili  per le rinnovabili
+#https://download.terna.it/terna/dds%20libro%2009%2030%2017h15_8d745ced8696c60.pdf per il carbone
 
 #grafico confronto capacità
 carriers = validation_capacity.index
@@ -135,9 +137,11 @@ plt.show()
 
 #2) validazione carico
 plt.figure(3,figsize=(15,4))
-load = n.loads_t.p_set.sum(axis = 1).values.sum()/1e6   #294 TWh
-n.loads_t.p.resample("H").mean().sum(axis=1).div(1e3).plot()#andamento non disponibile su Terna
+load = n.loads_t.p_set.sum(axis = 1).values.sum()/1e6   #294 TWh 
+n.loads_t.p.resample("H").mean().sum(axis=1).div(1e3).plot()#andamento non disponibile su Terna, hoc caricato un'immagine con andamento domanda 2021 da dati presi da Terna nel download center
 plt.ylabel("Electric demand 2019 [GW]")
+
+#https://dati.terna.it/fabbisogno/dati-statistici#domanda/copertura-fonte 
 
 
 
@@ -147,7 +151,7 @@ plt.ylabel("Electric demand 2019 [GW]")
 generators= n.generators_t.p.sum(axis = 1).values.sum()/1e6    #280 TWh , manca idroelettrico forse
 
 generazione_totale = pd.concat([n.generators_t.p , n.storage_units_t.p], axis= 1).sum().values.sum()/1e6   #294 TWh su Terna 294 TWh alla produzione di energia totale
-
+#https://dati.terna.it/generazione/dati-statistici#produzione/energia-elettrica-fonte
 
 plt.figure(figsize=(15,3))
 
@@ -208,6 +212,7 @@ plt.show()
 
 #grafico  a barre, per confronto con dati di Terna sulla produzione
 reference_data_Terna1 = [195.7, 23.7, 20.2, 48.15]  #TWh ,da Terna; termoelettrico, fotovoltaico, eolico, idrico
+#https://dati.terna.it/generazione/dati-statistici#produzione/energia-elettrica-fonte 
 termoelettrico_g = termoelettrico.sum()/1e3  # TWh
 PV_g = PV.sum()/1e3  #TWh
 wind_g = wind.sum()/1e3  #TWh
