@@ -82,7 +82,7 @@ importazione_tot = import_lines.loc[["1", "3", "4"]].sum()
 #import italiano tot 2019 sulla frontiera Nord , in TWh , su Terna è di 38 TWh, qui 29,45 TWh, ma non ci sono tutte le interconnessioni
 
 
-reference_data_Terna1 = [1.2, 21.2, 14.3]  #TWh ,da Terna; Austria,Svizzera, Francia
+reference_data_Terna1 = [1.2, 21.2, 14.3]  #TWh ,da Terna; Austria,Svizzera, Francia, ho messo le foto prese da DDS2022
 
 
 
