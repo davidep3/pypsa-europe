@@ -153,6 +153,8 @@ plt.figure(figsize=(15,3))
 
 #termoelettrico (CCGT + coal)
 CCGT = n.generators_t.p.filter(like = "CCGT").sum(axis=1).resample("H").mean().div(1e3)  #GW
+produzione_CCGT = CCGT.sum()/1e3  
+#su DDS2022, nella foto che riporta la generazione, la produzione gas naturale è di 138 TWh, qui di 139,2 TWh
 
 coal = n.generators_t.p.filter(like="coal").sum(axis = 1).resample("H").mean().div(1e3)  #GW
 
