@@ -3,15 +3,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib as mpl
 import pandas as pd
-n= pypsa.Network("base_s_10_elec_1h.nc")
-
-#plotting networks
 import cartopy.crs as ccrs
+
+n= pypsa.Network("italy_2019.nc")
 
 #collegamento BUS
 
-loading = (n.lines_t.p0.abs().mean().sort_index() / (n.lines.s_nom*n.lines.s_max_pu).sort_index()).fillna(0.)
-
+def define_loading(n, pu):
+    if pu:
+        loading_lines = (n.lines_t.p0.abs().mean().sort_index() / (n.lines.s_nom * n.lines.s_max_pu).sort_index()).fillna(0.)
+        loading_links = (n.links_t.p0.abs().mean().sort_index() / (n.links.p_nom * n.links.p_max_pu).sort_index()).fillna(0.)
+    else:
+        loading_lines = (n.lines_t.p0.abs().max(axis=0) / n.lines.s_nom_opt).fillna(0.)
+        loading_links = (n.links_t.p0.abs().max(axis=0) / n.links.p_nom_opt).fillna(0.)
+    
+    return loading_lines, loading_links
+    
+pu = True
+loading_lines, loading_links = define_loading(n, pu)
 
 fig,ax = plt.subplots(
     figsize = (8,8), 
@@ -19,36 +28,36 @@ fig,ax = plt.subplots(
     )
 
 n.plot(ax = ax,
-       
-       
-       
        bus_colors = "red",
-       branch_components = ["Line"],   
-       line_widths = n.lines.s_nom/3e3,
-    
-       line_colors = loading,
+       branch_components = ["Line", "Link"],   
+       line_widths = n.lines.s_nom/2e3,
+       link_widths = n.links.p_nom / 2e3,
+       line_colors = loading_lines,
+       link_colors = loading_links,
        line_cmap = plt.cm.viridis,     #color map
        color_geomap = True,            #put the sea
-       bus_sizes = 0.05,)
+       bus_sizes = 0.05,
+       )
        
-       
-
-
 ax.axis("off")
 
 # Crea la legenda personalizzata per il carico sulle linee
 cmap = plt.cm.viridis
-norm = mpl.colors.Normalize(vmin=loading.min(), vmax=loading.max())
+
+min_value = loading_lines.min()
+max_value = loading_lines.max()
+
+norm = mpl.colors.Normalize(vmin=min_value, vmax=max_value)
 
 # Crea una lista di "patch" che corrispondono ai valori di carico
 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
 sm.set_array([])  # Impostiamo un array vuoto per la colorbar
 
 # Definisci il numero di valori da mostrare nella legenda
-n_labels = 5  # Numero di etichette nella legenda
+n_labels = 8  # Numero di etichette nella legenda
 
 # Crea un intervallo per i valori da visualizzare
-values = [loading.min() + i * (loading.max() - loading.min()) / (n_labels - 1) for i in range(n_labels)]
+values = [min_value + i * (max_value - min_value) / (n_labels - 1) for i in range(n_labels)]
 
 # Aggiungi la legenda
 labels = [f"{v:.2f}" for v in values]  # Formatta i valori come stringhe
@@ -59,15 +68,14 @@ ax.legend(handles, labels, title="lines load [p.u]", loc="upper right")
 plt.show()
 
 
-
-
-
-
 #1) validazione capacità installata
 
-installed_capacity = n.generators.groupby("carrier").p_nom.sum()/1e3  #GW
+generators = n.generators[n.generators.index.str.startswith('IT')]
+storage_units = n.storage_units[n.storage_units.index.str.startswith('IT')]
 
-hydro_storage = n.storage_units.p_nom.sum()/1e3   #GW
+installed_capacity = generators.groupby("carrier").p_nom.sum()/1e3  #GW
+
+hydro_storage = storage_units.p_nom.sum()/1e3   #GW
 
 hydro_storage_s = pd.Series([hydro_storage], index=["hydro_storage"])
 
@@ -78,10 +86,7 @@ df["hydropower"] = df["ror"] + df["hydro_storage"]
 
 validation_capacity = df.loc[["CCGT", "coal", "onwind" ,"solar", "hydropower"]]  
 
-
-
 #confronto con dati Terna CAPACITA' INSTALLATA
-
 
 reference_data_Terna = [40.5, 10, 10.7, 20.8, 19.8]  # Presi da Terna, CCGT preso sia con produzione di calore che senza, carobne da DDS 2019
 
@@ -126,17 +131,14 @@ plt.show()
 
 
 
-
-
-
-
-
-
-
 #2) validazione carico
 plt.figure(3,figsize=(15,4))
-load = n.loads_t.p_set.sum(axis = 1).values.sum()/1e6   #294 TWh
-n.loads_t.p.resample("H").mean().sum(axis=1).div(1e3).plot()#andamento non disponibile su Terna
+
+load_italy = n.loads[n.loads.index.str.startswith('IT')]
+loads_t_italy = n.loads_t.p_set.loc[:, n.loads_t.p_set.columns.str.startswith('IT')]
+
+load = loads_t_italy.sum(axis = 1).values.sum()/1e6   #294 TWh
+loads_t_italy.resample("H").mean().sum(axis=1).div(1e3).plot()#andamento non disponibile su Terna
 plt.ylabel("Electric demand 2019 [GW]")
 
 
@@ -144,27 +146,32 @@ plt.ylabel("Electric demand 2019 [GW]")
 
 
 #3) validazione produzione
-generators= n.generators_t.p.sum(axis = 1).values.sum()/1e6    #280 TWh , manca idroelettrico forse
+generators_italy = n.generators[n.generators.index.str.startswith('IT')]
+generators_t_italy = n.generators_t.p.loc[:, n.generators_t.p.columns.str.startswith('IT')]
+storage_units_italy = n.storage_units[n.storage_units.index.str.startswith('IT')]
+storage_units_t_italy = n.storage_units_t.p.loc[:, n.storage_units_t.p.columns.str.startswith('IT')]
 
-generazione_totale = pd.concat([n.generators_t.p , n.storage_units_t.p], axis= 1).sum().values.sum()/1e6   #294 TWh su Terna 294 TWh alla produzione di energia totale
+generators= generators_t_italy.sum(axis = 1).values.sum()/1e6    #280 TWh , manca idroelettrico forse
+
+generazione_totale = pd.concat([generators_t_italy , storage_units_t_italy], axis= 1).sum().values.sum()/1e6   #294 TWh su Terna 294 TWh alla produzione di energia totale
 
 
 plt.figure(figsize=(15,3))
 
 #termoelettrico (CCGT + coal)
-CCGT = n.generators_t.p.filter(like = "CCGT").sum(axis=1).resample("H").mean().div(1e3)  #GW
+CCGT = generators_t_italy.filter(like = "CCGT").sum(axis=1).resample("H").mean().div(1e3)  #GW
 produzione_CCGT = CCGT.sum()/1e3  
 #su DDS2022, nella foto che riporta la generazione, la produzione gas naturale è di 138 TWh, qui di 139,2 TWh
 
-coal = n.generators_t.p.filter(like="coal").sum(axis = 1).resample("H").mean().div(1e3)  #GW
+coal = generators_t_italy.filter(like="coal").sum(axis = 1).resample("H").mean().div(1e3)  #GW
 
 termoelettrico = CCGT + coal
 plt.plot(termoelettrico,label ="thermoelectric")
 
-PV = n.generators_t.p.filter(like = "solar").sum(axis=1).resample("H").mean().div(1e3) #GW
+PV = generators_t_italy.filter(like = "solar").sum(axis=1).resample("H").mean().div(1e3) #GW
 plt.plot(PV,label="Photovoltaic",color ="red",alpha = 0.1)
 
-wind = n.generators_t.p.filter(like = "wind").sum(axis = 1).resample("H").mean().div(1e3) #GW
+wind = generators_t_italy.filter(like = "wind").sum(axis = 1).resample("H").mean().div(1e3) #GW
 plt.plot(wind,label ="pv",color = "green", alpha = 1)
 
 
@@ -201,7 +208,6 @@ plt.tight_layout()
 plt.show()
 
 
-
 plt.show()
 
 
@@ -212,8 +218,8 @@ termoelettrico_g = termoelettrico.sum()/1e3  # TWh
 PV_g = PV.sum()/1e3  #TWh
 wind_g = wind.sum()/1e3  #TWh
 
-hydro_g = n.generators_t.p.filter(like = "ror").sum(axis=1).sum()/1e6  #TWh
-hydro_s = n.storage_units_t.p.sum(axis=1).sum()/1e6   #TWh
+hydro_g = generators_t_italy.filter(like = "ror").sum(axis=1).sum()/1e6  #TWh
+hydro_s = storage_units_t_italy.sum(axis=1).sum()/1e6   #TWh
 hydro = hydro_g + hydro_s
 
 
