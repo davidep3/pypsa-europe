@@ -67,7 +67,7 @@ snapshots:
 enable:
   retrieve: auto
   retrieve_databundle: false
-  retrieve_cost_data: true
+  retrieve_cost_data: false
   build_cutout: false
   retrieve_cutout: true
   custom_busmap: false
@@ -105,16 +105,16 @@ electricity:
     H2: 168
 
   extendable_carriers:
-    Generator: [solar, onwind, bwr, nu_scale, nuclear]
+    Generator: [solar, onwind, nu_scale, bwr]
     StorageUnit: [battery, H2] # battery, H2
     Store: []
     Link: [] # H2 pipeline
 
   powerplants_filter: (DateOut >= 2019 or DateOut != DateOut) and not (Country == 'Germany' and Fueltype == 'Nuclear')
   custom_powerplants: false
-  everywhere_powerplants: [nu_scale, bwr]
+  everywhere_powerplants: [nu_scale, bwr, nuclear]
 
-  conventional_carriers: [bwr, nu_scale, CCGT]
+  conventional_carriers: [bwr, nu_scale, CCGT, nuclear]
   renewable_carriers: [solar, solar-hsat, onwind, offwind-ac, offwind-dc, offwind-float, hydro]
 
   estimate_renewable_capacities:
@@ -863,7 +863,7 @@ costs:
   #   onwind: 500
   marginal_cost:
     solar: 0.01
-    onwind: 0.015
+    onwind: 0.01
     offwind: 0.015
     hydro: 0.
     H2: 0.
@@ -872,7 +872,7 @@ costs:
     battery: 0.
     battery inverter: 0.
   emission_prices:
-    enable: false
+    enable: true
     co2: 100
     co2_monthly_prices: false
 
@@ -926,6 +926,7 @@ solving:
       nom_mod:
         AC: 400
         DC: 500
+        nuclear: 2000
         bwr: 300
         nu_scale: 77
 
@@ -1392,4 +1393,5 @@ plotting:
     waste CHP: '#e3d37d'
     waste CHP CC: '#e3d3ff'
     HVC to air: 'k'
+
 
