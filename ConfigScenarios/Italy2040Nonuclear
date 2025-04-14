@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "Italy2040nonnuclear"
+  name: "Italy2040nuclear"
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -105,16 +105,16 @@ electricity:
     H2: 168
 
   extendable_carriers:
-    Generator: [solar, onwind]
+    Generator: [solar, onwind, nu_scale]
     StorageUnit: [battery, H2] # battery, H2
     Store: []
     Link: [] # H2 pipeline
 
   powerplants_filter: (DateOut >= 2019 or DateOut != DateOut) and not (Country == 'Germany' and Fueltype == 'Nuclear')
   custom_powerplants: false
-  everywhere_powerplants: []
+  everywhere_powerplants: [nu_scale,nuclear]
 
-  conventional_carriers: [CCGT]
+  conventional_carriers: [CCGT, nu_scale, nuclear]
   renewable_carriers: [solar, solar-hsat, onwind, offwind-ac, offwind-dc, offwind-float, hydro]
 
   estimate_renewable_capacities:
