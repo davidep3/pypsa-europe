@@ -105,16 +105,16 @@ electricity:
     H2: 168
 
   extendable_carriers:
-    Generator: [solar, onwind, nu_scale, bwr]
+    Generator: [solar, onwind, nu_scale, smr_pwr]
     StorageUnit: [battery, H2] # battery, H2
     Store: []
     Link: [] # H2 pipeline
 
   powerplants_filter: (DateOut >= 2019 or DateOut != DateOut) and not (Country == 'Germany' and Fueltype == 'Nuclear')
   custom_powerplants: false
-  everywhere_powerplants: [nu_scale, bwr, nuclear]
+  everywhere_powerplants: [nu_scale, smr_pwr, nuclear]
 
-  conventional_carriers: [bwr, nu_scale, CCGT, nuclear]
+  conventional_carriers: [smr_pwr, nu_scale, CCGT, nuclear]
   renewable_carriers: [solar, solar-hsat, onwind, offwind-ac, offwind-dc, offwind-float, hydro]
 
   estimate_renewable_capacities:
@@ -369,7 +369,7 @@ pypsa_eur:
   - nuclear
   - smr_pwr
   - nu_scale
-  - bwr
+  - smr_pwr
   StorageUnit:
   - PHS
   - hydro
@@ -927,7 +927,7 @@ solving:
         AC: 400
         DC: 500
         nuclear: 2000
-        bwr: 300
+        smr_pwr: 300
         nu_scale: 77
 
     # io_api: "direct"  # Increases performance but only supported for the highs and gurobi solvers
@@ -1166,8 +1166,8 @@ plotting:
     Nuclear: '#ff8c00'
     Nuclear marginal: '#ff8c00'
     nuclear: '#ff8c00'
-    bwr: '#ff8c00'
-    bwr marginal: '#ff8c00'
+    smr_pwr: '#ff8c00'
+    smr_pwr marginal: '#ff8c00'
     nu_scale: '#ff8c00'
     nu_scale marginal: '#ff8c00'
     uranium: '#ff8c00'
