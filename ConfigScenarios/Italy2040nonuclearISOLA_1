@@ -105,16 +105,16 @@ electricity:
     H2: 168
 
   extendable_carriers:
-    Generator: [solar, onwind]
+    Generator: [solar, onwind, offwind-ac, offwind-dc, offwind-float]
     StorageUnit: [battery, H2] # battery, H2
     Store: []
     Link: [] # H2 pipeline
 
   powerplants_filter: (DateOut >= 2019 or DateOut != DateOut) and not (Country == 'Germany' and Fueltype == 'Nuclear')
   custom_powerplants: false
-  everywhere_powerplants: [nu_scale,nuclear]
+  everywhere_powerplants: []
 
-  conventional_carriers: [CCGT, nu_scale, nuclear]
+  conventional_carriers: [CCGT]
   renewable_carriers: [solar, solar-hsat, onwind, offwind-ac, offwind-dc, offwind-float, hydro]
 
   estimate_renewable_capacities:
