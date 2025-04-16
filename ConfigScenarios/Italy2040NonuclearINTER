@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "Italy2040nuclear"
+  name: "Italy2040nonnuclear"
   scenarios:
     enable: false
     file: config/scenarios.yaml
