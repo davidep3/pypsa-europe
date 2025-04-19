@@ -275,7 +275,7 @@ renewable:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#conventional
 conventional:
-  unit_commitment: false
+  unit_commitment: true
   dynamic_fuel_price: false
   nuclear:
     p_max_pu: "data/nuclear_p_max_pu.csv" # float of file name
@@ -936,7 +936,7 @@ solving:
     min_iterations: 2
     max_iterations: 3
     transmission_losses: 2
-    linearized_unit_commitment: true
+    linearized_unit_commitment: false
     horizon: 365
     post_discretization:
       enable: false
