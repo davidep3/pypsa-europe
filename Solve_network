@@ -872,7 +872,7 @@ def add_operational_reserve_margin(n, sns, config):
     status = n.model["Generator-status"].rename({"Generator-com":"Generator"})
 
     #generatori
-    lhs_modular = (capacity_variable_g.loc[{"Generator" : ext_modular_i}] * xr.DataArray(p_max_pu_g[ext_modular_i],dims=["snapshot", "Generator"]))   #SMR, dà errore con status . quadratic expression
+    lhs_modular = (capacity_variable_g.loc[{"Generator" : ext_modular_i}] * xr.DataArray(p_max_pu_g[ext_modular_i],dims=["snapshot", "Generator"]))   #SMR, dà errore con status . quadratic expression mettere 300
 
     lhs_continuos = (capacity_variable_g.loc[{"Generator" : ext_continuos_i}] * xr.DataArray(p_max_pu_g[ext_continuos_i],dims=["snapshot", "Generator"]))  #rinnovabili, non committable, ma espandibili
 
@@ -893,7 +893,7 @@ def add_operational_reserve_margin(n, sns, config):
 
 
     #accumuli
-    rhs_s_fix = (p_max_pu_s[fix_s_i] * capacity_fixed_s[fix_s_i]).reindex(columns=stores_i, fill_value=0)
+    rhs_s_fix = (p_max_pu_s[fix_s_i] * capacity_fixed_s[fix_s_i]).reindex(columns=fix_s_i, fill_value=0)
 
     
 
