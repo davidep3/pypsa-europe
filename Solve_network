@@ -790,9 +790,9 @@ def add_operational_reserve_margin(n, sns, config):
     summed_reserve_g = reserve_g.sum("Generator")
 
     n.model.add_variables(                                                      #aggiungo le riserve associtate agli accumuli!
-        0,np.inf, coords =[sns, n.storage_units.index], name="Storage-r")
+        0,np.inf, coords =[sns, n.storage_units.index], name="StorageUnit-r")
 
-    reserve_s = n.model["Storage-r"]
+    reserve_s = n.model["StorageUnit-r"]
     summed_reserve_s = reserve_s.sum("StorageUnit")
 
 
@@ -843,7 +843,7 @@ def add_operational_reserve_margin(n, sns, config):
     reserve_g = n.model["Generator-r"]
 
     dispatch_s = n.model["StorageUnit-p_dispatch"]    #dispatch e non store per questo vincolo
-    reserve_s = n.model["Storage-r"]
+    reserve_s = n.model["StorageUnit-r"]
 
 
     
@@ -869,22 +869,22 @@ def add_operational_reserve_margin(n, sns, config):
     p_max_pu_s = get_as_dense(n, "StorageUnit", "p_max_pu")
 
 
-    status = n.model["Generator-status"].rename({"Generator-com":"Generator"})
+    status = n.model["Generator-status"].rename({"Generator-com":"Generator"})  #unit_commitment
 
-    #generatori
-    lhs_modular = (capacity_variable_g.loc[{"Generator" : ext_modular_i}] * xr.DataArray(p_max_pu_g[ext_modular_i],dims=["snapshot", "Generator"]))   #SMR, dà errore con status . quadratic expression mettere 300
+    #generatori sx
+    lhs_modular = (300 * xr.DataArray(p_max_pu_g[ext_modular_i],dims=["snapshot", "Generator"]))  * status.loc[{"Generator": ext_modular_i}]  #SMR, dà errore con status . quadratic expression
 
     lhs_continuos = (capacity_variable_g.loc[{"Generator" : ext_continuos_i}] * xr.DataArray(p_max_pu_g[ext_continuos_i],dims=["snapshot", "Generator"]))  #rinnovabili, non committable, ma espandibili
 
 
-    #accumuli
+    #accumuli sx
     lhs_s = capacity_variable_s.loc[{"StorageUnit": ext_s_i}] * xr.DataArray(p_max_pu_s[ext_s_i],dims = ["snapshot", "StorageUnit"])  #quindi idrogeno e batterie
     
     #vincolo sinistro
     lhs = dispatch_g + reserve_g + dispatch_s + reserve_s - lhs_modular - lhs_continuos - lhs_s
 
 
-    #generatori
+    #generatori dx
     rhs_modular = ((xr.DataArray(capacity_fixed_g[fix_modular_i]) * xr.DataArray(p_max_pu_g[fix_modular_i],dims = ["snapshot","Generator"])) * status.loc[{"Generator": fix_modular_i}])#CCGT committable si ma non soggetto ad ottimizzazione 
 
     #rhs_continuos = (xr.DataArray(capacity_fixed_g[fix_i]) * xr.DataArray(p_max_pu[fix_i],dims = ["snapshot","Generator"]))
@@ -892,7 +892,7 @@ def add_operational_reserve_margin(n, sns, config):
     rhs_continuos = (p_max_pu_g[fix_i] * capacity_fixed_g[fix_i]).reindex(columns=fix_i, fill_value=0)
 
 
-    #accumuli
+    #accumuli dx
     rhs_s_fix = (p_max_pu_s[fix_s_i] * capacity_fixed_s[fix_s_i]).reindex(columns=fix_s_i, fill_value=0)
 
     
