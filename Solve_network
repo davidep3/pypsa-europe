@@ -517,13 +517,43 @@ def prepare_network(
             n, limit_dict=limit_dict, planning_horizons=planning_horizons
         )
 
-    if solve_opts.get("modularity").get("enable"):
+  #  if solve_opts.get("modularity").get("enable"):
+  #      modularity = solve_opts["modularity"]
+  #      n.lines["s_nom_mod"] = modularity["nom_mod"]["AC"]
+  #      n.links.loc[n.links["carrier"] == "DC", "p_nom_mod"] = modularity["nom_mod"]["DC"]
+  #      n.generators.loc[n.generators["carrier"] == "nuclear", "p_nom_mod"] = modularity["nom_mod"]["nuclear"]
+  #      n.generators.loc[n.generators["carrier"] == "smr_pwr", "p_nom_mod"] = modularity["nom_mod"]["smr_pwr"]
+  #      n.generators.loc[n.generators["carrier"] == "CCGT", "p_nom_mod"] = modularity["nom_mod"]["CCGT"]
+
+
+    if solve_opts.get("modularity", {}).get("enable"):
         modularity = solve_opts["modularity"]
-        n.lines["s_nom_mod"] = modularity["nom_mod"]["AC"]
-        n.links.loc[n.links["carrier"] == "DC", "p_nom_mod"] = modularity["nom_mod"]["DC"]
-        n.generators.loc[n.generators["carrier"] == "nuclear", "p_nom_mod"] = modularity["nom_mod"]["nuclear"]
-        n.generators.loc[n.generators["carrier"] == "smr_pwr", "p_nom_mod"] = modularity["nom_mod"]["smr_pwr"]
-        n.generators.loc[n.generators["carrier"] == "CCGT", "p_nom_mod"] = modularity["nom_mod"]["CCGT"]
+
+        component_attrs = {                #nomi codice convertiti in nomi attributi network n
+        "Generator": "generators",
+        "Link": "links",
+        "Line": "lines",
+        "Store": "stores",
+        "StorageUnit": "storage_units"}
+
+        nominal_attrs = {               
+        "Generator": "p_nom",
+        "Link": "p_nom",
+        "Line": "s_nom",
+        "Store": "e_nom",
+        "StorageUnit": "p_nom"}
+
+        for component_name in component_attrs:
+            df = getattr(n, component_attrs[component_name])   #dataframe del componenente
+            nom_attr = nominal_attrs[component_name]    #p_nom o s_nom
+
+            for carrier, mod_val in modularity["nom_mod"].items():
+                if "carrier" in df.columns:
+                    mask = df["carrier"] == carrier
+                    df.loc[mask, f"{nom_attr}_mod"] = mod_val   #scrive il valore della modularità nel nuovo campo
+
+
+        
         
 
         
@@ -794,6 +824,8 @@ def add_operational_reserve_margin(n, sns, config):
 
     reserve_s = n.model["StorageUnit-r"]
     summed_reserve_s = reserve_s.sum("StorageUnit")
+    
+
 
 
 
@@ -807,7 +839,7 @@ def add_operational_reserve_margin(n, sns, config):
             .loc[vres_i.intersection(ext_i)]
             .rename({"Generator-ext": "Generator"})
         )
-        lhs = summed_reserve_g + summed_reserve_s + (
+        lhs = summed_reserve_g  + summed_reserve_s + (
             p_nom_vres * (-EPSILON_VRES * xr.DataArray(capacity_factor))
         ).sum("Generator")
 
@@ -839,13 +871,19 @@ def add_operational_reserve_margin(n, sns, config):
     fix_s_i = n.storage_units.query("not p_nom_extendable").index  #PHS  hydro
 
 
-    dispatch_g = n.model["Generator-p"]
+    dispatch_g = n.model["Generator-p"]    #variabili di n.model, quindi le operazioni con altre variabili sono accettate solo se esse sono xarray.dataarray
     reserve_g = n.model["Generator-r"]
 
     dispatch_s = n.model["StorageUnit-p_dispatch"]    #dispatch e non store per questo vincolo
     reserve_s = n.model["StorageUnit-r"]
+    
+     #Imposta il limite superiore al 98.5% della potenza disponibile per i termici estendibili
 
 
+
+  
+
+    
     
 
     capacity_variable_g = n.model["Generator-p_nom"].rename(       #variabile da ottimizzare
@@ -871,25 +909,68 @@ def add_operational_reserve_margin(n, sns, config):
 
     status = n.model["Generator-status"].rename({"Generator-com":"Generator"})  #unit_commitment
 
+        # ---- Limite 98.5% sulla potenza attiva dei generatori convenzionali ----
+
+
+
+# Unione generatori termoelettrici
+    thermal_i = ext_modular_i.union(fix_modular_i)    #ccgt + smr
+
+# Dispatch per questi generatori
+    dispatch_thermal = dispatch_g.loc[{"Generator": thermal_i}]
+
+# Lato destro: 98.5% della potenza massima
+    p_max_thermal_ext = (
+    0.985 * capacity_variable_g.loc[{"Generator": ext_modular_i}]
+    * xr.DataArray(p_max_pu_g[ext_modular_i], dims=["snapshot", "Generator"]))
+
+
+    p_max_thermal_fix = (
+    0.985 * xr.DataArray(capacity_fixed_g[fix_modular_i], dims=["Generator"])
+    * xr.DataArray(p_max_pu_g[fix_modular_i], dims=["snapshot", "Generator"]))
+
+
+# Applica il vincolo per entrambi i gruppi
+    n.model.add_constraints(
+    dispatch_g.loc[{"Generator": ext_modular_i}] <= p_max_thermal_ext,
+    name="Thermal_Dispatch_Limit_Ext")
+
+    n.model.add_constraints(
+    dispatch_g.loc[{"Generator": fix_modular_i}] <= p_max_thermal_fix,
+    name="Thermal_Dispatch_Limit_Fix")
+
+
+
+    
+
+  
+
+    
+
+
+
+
+
     #generatori sx
     lhs_modular = (300 * xr.DataArray(p_max_pu_g[ext_modular_i],dims=["snapshot", "Generator"]))  * status.loc[{"Generator": ext_modular_i}]  #SMR, dà errore con status . quadratic expression
 
-    lhs_continuos = (capacity_variable_g.loc[{"Generator" : ext_continuos_i}] * xr.DataArray(p_max_pu_g[ext_continuos_i],dims=["snapshot", "Generator"]))  #rinnovabili, non committable, ma espandibili
+    lhs_continuos = (capacity_variable_g.loc[{"Generator" : ext_continuos_i}] * xr.DataArray(p_max_pu_g[ext_continuos_i],dims=["snapshot", "Generator"]))  #rinnovabili, non committable, ma espandibili, non possono fornire a salire!!!
 
 
     #accumuli sx
-    lhs_s = capacity_variable_s.loc[{"StorageUnit": ext_s_i}] * xr.DataArray(p_max_pu_s[ext_s_i],dims = ["snapshot", "StorageUnit"])  #quindi idrogeno e batterie
+    lhs_s_ext = capacity_variable_s.loc[{"StorageUnit": ext_s_i}] * xr.DataArray(p_max_pu_s[ext_s_i],dims = ["snapshot", "StorageUnit"])  #quindi idrogeno e batterie
     
-    #vincolo sinistro
-    lhs = dispatch_g + reserve_g + dispatch_s + reserve_s - lhs_modular - lhs_continuos - lhs_s
-
+    #vincolo sinistro per i generatori
+    lhs_g = dispatch_g + reserve_g  - lhs_modular -lhs_continuos
+    #vincolo sinistro per gli accumuli
+    lhs_s = dispatch_s + reserve_s - lhs_s_ext
 
     #generatori dx
     rhs_modular = ((xr.DataArray(capacity_fixed_g[fix_modular_i]) * xr.DataArray(p_max_pu_g[fix_modular_i],dims = ["snapshot","Generator"])) * status.loc[{"Generator": fix_modular_i}])#CCGT committable si ma non soggetto ad ottimizzazione 
 
     #rhs_continuos = (xr.DataArray(capacity_fixed_g[fix_i]) * xr.DataArray(p_max_pu[fix_i],dims = ["snapshot","Generator"]))
 
-    rhs_continuos = (p_max_pu_g[fix_i] * capacity_fixed_g[fix_i]).reindex(columns=fix_i, fill_value=0)
+    #rhs_continuos = (p_max_pu_g[fix_i] * capacity_fixed_g[fix_i]).reindex(columns=fix_i, fill_value=0)
 
 
     #accumuli dx
@@ -897,13 +978,19 @@ def add_operational_reserve_margin(n, sns, config):
 
     
 
-    #vincolo destro
-    rhs =  rhs_modular + rhs_continuos + rhs_s_fix
+    #vincolo destro generatori
+    rhs_g =  rhs_modular 
+    #vincolo destro per gli accumuli
+    rhs_s = rhs_s_fix
+    
     
 
-    n.model.add_constraints(lhs <= rhs, name="Generator-p-reserve-upper")
+    n.model.add_constraints(lhs_g <= rhs_g, name="Generator-p-reserve-upper")
+    n.model.add_constraints(lhs_s<=rhs_s, name = "Storage-p-reserve-upper")
+    
+    
 
-
+    
 def add_battery_constraints(n):
     """
     Add constraint ensuring that charger = discharger, i.e.
@@ -1233,6 +1320,7 @@ def solve_network(
     # add to network for extra_functionality
     n.config = config
     n.params = params
+    
 
     if rolling_horizon and rule_name == "solve_operations_network":
         kwargs["horizon"] = cf_solving.get("horizon", 365)
@@ -1258,14 +1346,15 @@ def solve_network(
                 f"Solving status '{status}' with termination condition '{condition}'"
             )
         check_objective_value(n, solving)
-
+        
+        
     if "infeasible" in condition:
         labels = n.model.compute_infeasibilities()
         logger.info(f"Labels:\n{labels}")
         n.model.print_infeasibilities()
         raise RuntimeError("Solving status 'infeasible'")
-
-
+    
+   
 # %%
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -1320,7 +1409,7 @@ if __name__ == "__main__":
         )
 
     logger.info(f"Maximum memory usage: {mem.mem_usage}")
-
+    
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
     n.export_to_netcdf(snakemake.output.network)
 
