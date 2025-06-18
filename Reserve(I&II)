@@ -271,7 +271,7 @@ def add_operational_reserve_margin(n, sns, config):
     lhs_s_ext = capacity_variable_s.loc[{"StorageUnit": ext_s_i}] * xr.DataArray(p_max_pu_s[ext_s_i],dims = ["snapshot", "StorageUnit"])  #quindi idrogeno e batterie
     
     #vincolo sinistro per i generatori
-    lhs_g = dispatch_g + reserve_g_rp + reserve_g_rs - (lhs_modular_max - lhs_modular_min) -lhs_continuos
+    lhs_g = dispatch_g + reserve_g_rp + reserve_g_rs - (lhs_modular_max - lhs_modular_min)
     #vincolo sinistro per gli accumuli
     lhs_s = dispatch_s  + reserve_s_rp + reserve_s_rs - lhs_s_ext
 
