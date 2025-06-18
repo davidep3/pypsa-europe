@@ -1,0 +1,291 @@
+
+def add_operational_reserve_margin(n, sns, config):
+    """
+    Build reserve margin constraints based on the formulation given in
+    https://genxproject.github.io/GenX/dev/core/#Reserves.
+
+    Parameters
+    ----------
+        n : pypsa.Network
+        sns: pd.DatetimeIndex
+        config : dict
+
+    Example:
+    --------
+    config.yaml requires to specify operational_reserve:
+    operational_reserve: # like https://genxproject.github.io/GenX/dev/core/#Reserves
+        activate: true
+        epsilon_load: 0.02 # percentage of load at each snapshot
+        epsilon_vres: 0.02 # percentage of VRES at each snapshot
+        contingency: 400000 # MW
+    """
+    reserve_config = config["electricity"]["operational_reserve"]
+    EPSILON_LOAD = reserve_config["epsilon_load"]
+    EPSILON_VRES = reserve_config["epsilon_vres"]
+    CONTINGENCY = reserve_config["contingency"]
+
+# DEFINIZONE VARIABILI RISERVE PRIMARIA
+    n.model.add_variables(
+    0, np.inf, coords=[sns, n.generators.index], name="Generator-rp"
+    )
+    reserve_g_rp = n.model["Generator-rp"]
+    summed_reserve_g_rp = reserve_g_rp.sum("Generator")
+
+    n.model.add_variables(
+    0, np.inf, coords=[sns, n.storage_units.index], name="StorageUnit-rp"
+    ) 
+    reserve_s_rp = n.model["StorageUnit-rp"]
+    summed_reserve_s_rp = reserve_s_rp.sum("StorageUnit")
+
+
+# DEFINIZONE VARIABILI RISERVE SECONDARIA
+    n.model.add_variables(
+    0, np.inf, coords=[sns, n.generators.index], name="Generator-rs"
+    )
+    reserve_g_rs = n.model["Generator-rs"]
+    summed_reserve_g_rs = reserve_g_rs.sum("Generator")
+
+    n.model.add_variables(
+    0, np.inf, coords=[sns, n.storage_units.index], name="StorageUnit-rs"
+    )
+    reserve_s_rs = n.model["StorageUnit-rs"]
+    summed_reserve_s_rs = reserve_s_rs.sum("StorageUnit")
+
+    
+
+
+
+
+    # Share of extendable renewable capacities
+    ext_i = n.generators.query("p_nom_extendable").index                        #estendbili, quindi tutti , non solo rinnovabili
+    vres_i = n.generators_t.p_max_pu.columns                                    #rinnovabili, quindi potenziale variabile
+    if not ext_i.empty and not vres_i.empty:
+        capacity_factor = n.generators_t.p_max_pu[vres_i.intersection(ext_i)]   #: un DataFrame con il profilo temporale di produzione possibile (da 0 a 1) per ogni generatore.
+        p_nom_vres = (
+            n.model["Generator-p_nom"]
+            .loc[vres_i.intersection(ext_i)]
+            .rename({"Generator-ext": "Generator"})
+        )
+        lhs_rp = summed_reserve_g_rp + summed_reserve_s_rp + (
+        p_nom_vres * (-EPSILON_VRES * xr.DataArray(capacity_factor))
+        ).sum("Generator")
+
+        # Total demand per t
+        demand = get_as_dense(n, "Load", "p_set").sum(axis=1)
+
+        # VRES potential of non extendable generators
+        capacity_factor = n.generators_t.p_max_pu[vres_i.difference(ext_i)]
+        renewable_capacity = n.generators.p_nom[vres_i.difference(ext_i)]
+        potential = (capacity_factor * renewable_capacity).sum(axis=1)
+
+        # Right-hand-side
+        rhs = EPSILON_LOAD * demand + EPSILON_VRES * potential + CONTINGENCY
+
+        n.model.add_constraints(lhs_rp >= rhs, name="reserve_margin")    #vincolo sulla riserva primaria. Corretta allocazione della riserva minima
+
+    # additional constraint that capacity is not exceeded
+
+
+
+    #indici generatori
+    gen_i = n.generators.index
+    ext_modular_i = n.generators.query("p_nom_extendable and p_nom_mod.notnull() and p_nom_mod > 0").index  #SMR che sono committable quindi status si
+    ext_continuos_i = n.generators.query("p_nom_extendable and p_nom_mod == 0").index                                 #rinnovabili non committable quindi no status
+    fix_i = n.generators.query("not p_nom_extendable and p_nom_mod == 0").index                             #solar h-sat
+    fix_modular_i = n.generators.query("not p_nom_extendable and p_nom_mod.notnull() and p_nom_mod > 0").index  #CCGT committable quindi status si
+
+    #indici accumuli
+    stores_i = n.storage_units.index
+    ext_s_i = n.storage_units.query("p_nom_extendable").index      #idrogeno e batterie
+    fix_s_i = n.storage_units.query("not p_nom_extendable").index  #PHS  hydro
+
+
+    dispatch_g = n.model["Generator-p"]    #variabili di n.model, quindi le operazioni con altre variabili sono accettate solo se esse sono xarray.dataarray
+    reserve_g_rp = n.model["Generator-rp"]
+    reserve_g_rs = n.model["Generator-rs"]
+
+
+    # Dispatch separato
+    dispatch_g_ext_modular = dispatch_g.loc[{"Generator": ext_modular_i}]
+    dispatch_g_fix_modular = dispatch_g.loc[{"Generator": fix_modular_i}]
+
+# Riserva primaria separata
+    reserve_g_rp_ext_modular = reserve_g_rp.loc[{"Generator": ext_modular_i}]
+    reserve_g_rp_fix_modular = reserve_g_rp.loc[{"Generator": fix_modular_i}]
+
+# Riserva secondaria separata
+    reserve_g_rs_ext_modular = reserve_g_rs.loc[{"Generator": ext_modular_i}]
+    reserve_g_rs_fix_modular = reserve_g_rs.loc[{"Generator": fix_modular_i}]
+
+
+
+
+
+   
+
+    dispatch_s = n.model["StorageUnit-p_dispatch"]    #dispatch e non store per questo vincolo
+    reserve_s_rp = n.model["StorageUnit-rp"]
+    reserve_s_rs = n.model["StorageUnit-rs"]
+    
+
+
+
+    
+    
+
+    capacity_variable_g = n.model["Generator-p_nom"].rename(       #variabile da ottimizzare
+        {"Generator-ext": "Generator"}
+    )
+
+    
+    capacity_fixed_g = n.generators.p_nom                        #variabile da non ottimizzare
+
+
+    capacity_variable_s = n.model["StorageUnit-p_nom"].rename(
+        {"StorageUnit-ext": "StorageUnit"}
+
+        )
+
+    capacity_fixed_s = n.storage_units.p_nom
+
+
+  
+    p_max_pu_g = get_as_dense(n, "Generator", "p_max_pu")
+    p_max_pu_s = get_as_dense(n, "StorageUnit", "p_max_pu")
+
+
+    status = n.model["Generator-status"].rename({"Generator-com":"Generator"})  #unit_commitment
+
+     #Limite 98.5% sulla potenza attiva dei generatori convenzionali
+
+
+
+# Unione generatori termoelettrici
+    thermal_i = ext_modular_i.union(fix_modular_i)    #ccgt + smr con gli indici
+
+# Dispatch per questi generatori
+    dispatch_thermal = dispatch_g.loc[{"Generator": thermal_i}]
+
+# Lato destro: 98.5% della potenza massima
+    p_max_thermal_ext = (
+    0.985 * capacity_variable_g.loc[{"Generator": ext_modular_i}]
+    * xr.DataArray(p_max_pu_g[ext_modular_i], dims=["snapshot", "Generator"]))
+
+
+    p_max_thermal_fix = (
+    0.985 * xr.DataArray(capacity_fixed_g[fix_modular_i], dims=["Generator"])
+    * xr.DataArray(p_max_pu_g[fix_modular_i], dims=["snapshot", "Generator"]))
+
+
+# Applica il vincolo per entrambi i gruppi
+    n.model.add_constraints(
+    dispatch_g.loc[{"Generator": ext_modular_i}] <= p_max_thermal_ext,
+    name="Thermal_Dispatch_Limit_Ext")
+
+    n.model.add_constraints(
+    dispatch_g.loc[{"Generator": fix_modular_i}] <= p_max_thermal_fix,
+    name="Thermal_Dispatch_Limit_Fix")
+
+
+
+
+
+    # Calcolo potenza residua per generatori rotanti fissi ed estendibili post primaria: riserva secondaria
+    residual_upward_g_fix = (
+    (xr.DataArray(capacity_fixed_g[fix_modular_i], dims=["Generator"])
+    * xr.DataArray(p_max_pu_g[fix_modular_i], dims=["snapshot", "Generator"]) * status.loc[{"Generator": fix_modular_i}])
+    - dispatch_g.loc[{"Generator": fix_modular_i}]
+    - reserve_g_rp.loc[{"Generator": fix_modular_i}]
+    )
+
+
+    residual_upward_g_ext = (
+    (300
+    * xr.DataArray(p_max_pu_g[ext_modular_i], dims=["snapshot", "Generator"]) * status.loc[{"Generator": ext_modular_i}])
+    - dispatch_g.loc[{"Generator": ext_modular_i}]
+    - reserve_g_rp.loc[{"Generator": ext_modular_i}]
+    )
+
+    dummy_ones = xr.DataArray(
+    1,
+    dims=["snapshot", "StorageUnit"],
+    coords={
+        "snapshot": p_max_pu_s.index,      # indice righe del DataFrame
+        "StorageUnit": p_max_pu_s.columns  # colonne del DataFrame
+    }
+    )
+
+# Calcolo potenza residua per accumuli post primaria
+    residual_upward_s_fix = (
+    xr.DataArray(capacity_fixed_s[fix_s_i], dims=["StorageUnit"]) 
+    * xr.DataArray(p_max_pu_s[fix_s_i], dims=["snapshot", "StorageUnit"]) * dummy_ones)
+    - dispatch_s.loc[{"StorageUnit": fix_s_i}]
+    - reserve_s_rp.loc[{"StorageUnit": fix_s_i}]
+    
+
+
+    residual_upward_s_ext = (
+    capacity_variable_s.loc[{"StorageUnit":ext_s_i}]
+    * xr.DataArray(p_max_pu_s[ext_s_i], dims=["snapshot", "StorageUnit"]) * dummy_ones)
+    - dispatch_s.loc[{"StorageUnit": ext_s_i}]
+    - reserve_s_rp.loc[{"StorageUnit": ext_s_i}]
+    
+
+    # Riserva secondaria richiesta 
+    L_max = demand.resample("1D").max()
+    #L_max = demand.max()   #daily_max = demand.resample("1D").max()  faccio un valore unico per tutto l'anno (periodo di riferimento) o creo un vettore di valori giornalieri.
+    R_sec = np.sqrt(10 * L_max - 150**2) - 150     #relazione presa dal Gatta
+
+    reserve_g_rs = reserve_g_rs_ext_modular + reserve_g_rs_fix_modular
+   
+
+    # Upper bounds (limite fisico) sulla secondaria
+    n.model.add_constraints(reserve_g_rs <= residual_upward_g_fix + residual_upward_g_ext, name="Generator-rs-upper")
+    n.model.add_constraints(reserve_s_rs <= residual_upward_s_ext, name  ="Storage-rs-upper")
+    
+    
+# Requisito minimo totale di riserva secondaria
+    total_rs = reserve_g_rs.sum("Generator") + reserve_s_rs.sum("StorageUnit")
+    n.model.add_constraints(total_rs >= R_sec, name="reserve_margin_secondary")
+
+
+   #vincolo generale che la riserva TOTALE sia sempre inferiore al delta tra Pmax e dispacciamento
+
+    #generatori sx
+    lhs_modular = (300 * xr.DataArray(p_max_pu_g[ext_modular_i],dims=["snapshot", "Generator"]))  * status.loc[{"Generator": ext_modular_i}]  #SMR, dà errore con status . quadratic expression
+
+    lhs_continuos = (capacity_variable_g.loc[{"Generator" : ext_continuos_i}] * xr.DataArray(p_max_pu_g[ext_continuos_i],dims=["snapshot", "Generator"]))  #rinnovabili, non committable, ma espandibili, non possono fornire a salire!!!
+
+
+    reserve_g_rp = reserve_g_rs_ext_modular + reserve_g_rs_fix_modular
+
+    #accumuli sx
+    lhs_s_ext = capacity_variable_s.loc[{"StorageUnit": ext_s_i}] * xr.DataArray(p_max_pu_s[ext_s_i],dims = ["snapshot", "StorageUnit"])  #quindi idrogeno e batterie
+    
+    #vincolo sinistro per i generatori
+    lhs_g = dispatch_g + reserve_g_rp + reserve_g_rs - lhs_modular 
+    #vincolo sinistro per gli accumuli
+    lhs_s = dispatch_s  + reserve_s_rp + reserve_s_rs - lhs_s_ext
+
+    #generatori dx
+    rhs_modular = ((xr.DataArray(capacity_fixed_g[fix_modular_i]) * xr.DataArray(p_max_pu_g[fix_modular_i],dims = ["snapshot","Generator"])) * status.loc[{"Generator": fix_modular_i}])#CCGT committable si ma non soggetto ad ottimizzazione 
+
+    #rhs_continuos = (xr.DataArray(capacity_fixed_g[fix_i]) * xr.DataArray(p_max_pu[fix_i],dims = ["snapshot","Generator"]))
+
+    #rhs_continuos = (p_max_pu_g[fix_i] * capacity_fixed_g[fix_i]).reindex(columns=fix_i, fill_value=0)
+
+
+    #accumuli dx
+    rhs_s_fix = (p_max_pu_s[fix_s_i] * capacity_fixed_s[fix_s_i]).reindex(columns=fix_s_i, fill_value=0)
+
+    
+
+    #vincolo destro generatori
+    rhs_g =  rhs_modular 
+    #vincolo destro per gli accumuli
+    rhs_s = rhs_s_fix
+    
+    
+
+    n.model.add_constraints(lhs_g <= rhs_g, name="Generator-p-reserve-upper")
+    n.model.add_constraints(lhs_s<=rhs_s, name = "Storage-p-reserve-upper")
